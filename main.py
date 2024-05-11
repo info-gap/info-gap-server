@@ -42,7 +42,7 @@ def RelevantProof(article: arxiv.Result, request: str):
             client=llm_client, 
             model=model, 
             allow_override=False
-        ))] = Field(..., description="Part of article summary that is relevant to user request. Leave empty if not relevant.")
+        ))] = Field(..., description="Part of article summary that is relevant to user request.")
         reason: Annotated[str, BeforeValidator(instructor.llm_validator(
             f"The text should explain why paper '{article.title}' is relevant to '{request}' based on '{article.summary}'. It should not be illusionary or irrelevant!", 
             client=llm_client, 
