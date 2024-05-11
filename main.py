@@ -25,7 +25,7 @@ llm_client = instructor.from_openai(
 arxiv_client = arxiv.Client()
 
 # Model of a single search query
-format_rule = "If you want to find paper about `Keyword One`, your query is: `all:keyword_one`; If you want to find paper about `Keyword One` AND `Keyword Two`, your query is: `all:keyword_one AND all:keyword_two`; If you want to find paper about `Keyword One` OR `Keyword Two`, your query is: `all:keyword_one OR all:keyword_two`; If you want to find paper about `Keyword One` ANDNOT `Keyword Two`, your query is: `all:keyword_one ANDNOT all:keyword_two`. You can use parenthesis to group the query. All keyword should be snake_cased! Please filter on `all` only, so all keywords should begin with `all:`!"
+format_rule = "If you want to find paper about `Keyword One`, your query is: `Keyword One`; If you want to find paper about `Keyword One` AND `Keyword Two`, your query is: `Keyword One AND Keyword Two`; If you want to find paper about `Keyword One` OR `Keyword Two`, your query is: `Keyword One OR Keyword Two`; If you want to find paper about `Keyword One` ANDNOT `Keyword Two`, your query is: `Keyword One ANDNOT Keyword Two`. You can use parenthesis to group the query!"
 class Search(BaseModel):
     query: Annotated[str, BeforeValidator(instructor.llm_validator(
         f"The query is formated as: {format_rule}", 
