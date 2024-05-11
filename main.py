@@ -38,13 +38,13 @@ class Search(BaseModel):
 def RelevantProof(article: arxiv.Result, request: str):
     class RelevantProof(BaseModel):
         part: Annotated[str, BeforeValidator(instructor.llm_validator(
-            f"The text must be either empty or DIRECTLY derived from '{article.title}' or '{article.summary}'. It should not be something about other articles! It should also be relevant to '{request}'.", 
+            f"The text must be directly derived from '{article.title}' or '{article.summary}'. It should not be something about other articles! It should also be relevant to '{request}'.", 
             client=llm_client, 
             model=model, 
             allow_override=False
         ))] = Field(..., description="Part of article summary that is relevant to user request. Leave empty if not relevant.")
         reason: Annotated[str, BeforeValidator(instructor.llm_validator(
-            f"The explanation should explain why paper '{article.title}' is relevant to '{request}' based on '{article.summary}'. It should not be illusionary or irrelevant!", 
+            f"The text should explain why paper '{article.title}' is relevant to '{request}' based on '{article.summary}'. It should not be illusionary or irrelevant!", 
             client=llm_client, 
             model=model, 
             allow_override=False
@@ -95,6 +95,7 @@ class SearchStream:
                     model=self.model,
                     messages=self.get_history(),
                     response_model=Search,
+                    max_retries=2,
                 )
                 with open("log/query.txt", "a") as f:
                     f.write(search.model_dump_json(indent=2) + "\n")
@@ -167,6 +168,7 @@ class ArticleFeedStream:
                     model=self.model,
                     messages=self.get_history(article),
                     response_model=RelevantProof(article, self.request),
+                    max_retries=2,
                 )
                 feed = ArticleFeed(title=article.title, proof=proof)
                 with open("log/feed.txt", "a") as f:
