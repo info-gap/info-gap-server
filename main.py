@@ -55,7 +55,9 @@ class Search(BaseModel):
 def relevant_proof(article: arxiv.Result, request: str):
     """Proof of relevancy of an article to the user request."""
 
-    class _RelevantProof(BaseModel):
+    class RelevantProof(BaseModel):
+        """Model of a proof of relevancy."""
+
         part: Annotated[
             str,
             BeforeValidator(
@@ -96,7 +98,7 @@ def relevant_proof(article: arxiv.Result, request: str):
                 raise ValueError("Relevancy should be in the range of 0 to 10")
             return v
 
-    return _RelevantProof
+    return RelevantProof
 
 
 class ArticleFeed(BaseModel):
