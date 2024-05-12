@@ -5,10 +5,10 @@ import os
 
 from openai import OpenAI
 from pydantic import BaseModel, field_validator, Field, BeforeValidator
-from instructor.client import Instructor
+from instructor.client import Instructor, ChatCompletionMessageParam
 from dotenv import load_dotenv
 import instructor
-import arxiv
+import arxiv  # type: ignore
 
 # Load environment
 load_dotenv()
@@ -118,7 +118,7 @@ class SearchStream:
         self.model = model
         self.request = request
 
-    def get_history(self) -> List[dict]:
+    def get_history(self) -> List[ChatCompletionMessageParam]:
         """Get the history of the conversation."""
         return [
             {
@@ -155,7 +155,7 @@ class ArticleStream:
 
     searches: Iterable[Search]
     client: arxiv.Client
-    generated: Set[str] = []
+    generated: Set[str] = set()
 
     def __init__(self, searches: Iterable[Search], client: arxiv.Client):
         self.searches = searches
@@ -178,7 +178,7 @@ class ArticleStream:
                     if result.entry_id not in self.generated:
                         with open("log/article.txt", "a", encoding="UTF-8") as f:
                             f.write(result.title + "\n")
-                        self.generated.append(result.entry_id)
+                        self.generated.add(result.entry_id)
                         yield result
             except ConnectionError as e:
                 print(f'😭 Error: "{e}", aborting the search!')
@@ -204,7 +204,7 @@ class ArticleFeedStream:
         self.model = model
         self.request = request
 
-    def get_history(self, article: arxiv.Result) -> List[dict]:
+    def get_history(self, article: arxiv.Result) -> List[ChatCompletionMessageParam]:
         """Get the history of the conversation."""
         return [
             {
