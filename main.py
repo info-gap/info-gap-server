@@ -2,10 +2,13 @@
 
 from typing import List, Iterable, Set, Annotated
 import os
+import time
+import logging
 
-from openai import OpenAI
+from openai import OpenAI, BadRequestError
 from pydantic import BaseModel, field_validator, Field, BeforeValidator
 from instructor.client import Instructor, ChatCompletionMessageParam
+from instructor.retry import InstructorRetryException  # type: ignore
 from dotenv import load_dotenv
 import instructor
 import arxiv  # type: ignore
@@ -35,6 +38,18 @@ If you want to find paper about `Keyword One` ANDNOT `Keyword Two`,
 your query is: `Keyword One ANDNOT Keyword Two`. 
 You can use parenthesis to group the query!"""
 
+# Initialize log path
+current_datetime = time.strftime("%Y-%m-%d_%H-%M-%S", time.localtime())
+log_path = f"log/{current_datetime}"
+os.makedirs(log_path, exist_ok=True)
+
+# Redirect debug log to file
+logging.basicConfig(
+    filename=f"{log_path}/debug.log",
+    level=logging.DEBUG,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+)
+
 
 class Search(BaseModel):
     """Model of a single search query."""
@@ -43,13 +58,14 @@ class Search(BaseModel):
         str,
         BeforeValidator(
             instructor.llm_validator(
-                f"The query is formated as: {FORMAT_RULE}",
+                f"The query is formated as: '{FORMAT_RULE}'",
                 client=llm_client,
                 model=MODEL,
                 allow_override=True,
+                temperature=0,
             )
         ),
-    ] = Field(..., description=f"The search query. Format rule is: {FORMAT_RULE}")
+    ] = Field(..., description=f"The search query. Format rule is: '{FORMAT_RULE}'")
 
 
 def relevant_proof(article: arxiv.Result, request: str):
@@ -62,27 +78,26 @@ def relevant_proof(article: arxiv.Result, request: str):
             str,
             BeforeValidator(
                 instructor.llm_validator(
-                    f"""The text must be directly derived from '{article.title}'
-                    or '{article.summary}'. It should not be something about other articles!
-                    It should also be relevant to '{request}'.""",
+                    f"""The text must be cited from '{article.summary}'!
+                    It should not be illusionary or irrelevant!""",
                     client=llm_client,
                     model=MODEL,
                     allow_override=False,
+                    temperature=0,
                 )
             ),
-        ] = Field(
-            ..., description="Part of article summary that is relevant to user request."
-        )
+        ] = Field(..., description="Cite relevant part from article summary.")
         reason: Annotated[
             str,
             BeforeValidator(
                 instructor.llm_validator(
                     f"""The text should explain why paper '{article.title}' is
-                    relevant to '{request}' based on '{article.summary}'.
+                    relevant to request '{request}' based on '{article.summary}'.
                     It should not be illusionary or irrelevant!""",
                     client=llm_client,
                     model=MODEL,
                     allow_override=False,
+                    temperature=0,
                 )
             ),
         ] = Field(..., description="Explain the relevancy.")
@@ -95,7 +110,7 @@ def relevant_proof(article: arxiv.Result, request: str):
         def relevancy_should_be_in_range(cls, v: float) -> float:
             """Check if relevancy is in the range of 0 to 10."""
             if v < 0 or v > 10:
-                raise ValueError("Relevancy should be in the range of 0 to 10")
+                raise ValueError("Relevancy should be in the range of 0 to 10.")
             return v
 
     return RelevantProof
@@ -144,12 +159,15 @@ class SearchStream:
                     messages=self.get_history(),
                     response_model=Search,
                     max_retries=2,
+                    temperature=1,  # We want the search query to be imaginative
                 )
-                with open("log/query.txt", "a", encoding="UTF-8") as f:
+                with open(f"{log_path}/query.txt", "a", encoding="UTF-8") as f:
                     f.write(search.model_dump_json(indent=2) + "\n")
                 yield search
-            except ConnectionError as e:
-                print(f'😭 Error: "{e}", retrying!')
+            except BadRequestError as e:
+                print(f'😭 Connection is unstable: "{e}", retrying!')
+            except InstructorRetryException as e:
+                print(f'😭 Max retry exceeded: "{e}", retrying!')
 
 
 class ArticleStream:
@@ -157,7 +175,6 @@ class ArticleStream:
 
     searches: Iterable[Search]
     client: arxiv.Client
-    generated: Set[str] = set()
 
     def __init__(self, searches: Iterable[Search], client: arxiv.Client):
         self.searches = searches
@@ -168,7 +185,6 @@ class ArticleStream:
         for search in self.searches:
             print(f'🔍 Searching for "{search.query}"...')
             try:
-                # Search arXiv
                 search = arxiv.Search(
                     query=search.query,
                     max_results=10,
@@ -176,12 +192,9 @@ class ArticleStream:
                 )
                 results = self.client.results(search)
                 for result in results:
-                    # Deduplicate articles by entry_id
-                    if result.entry_id not in self.generated:
-                        with open("log/article.txt", "a", encoding="UTF-8") as f:
-                            f.write(result.title + "\n")
-                        self.generated.add(result.entry_id)
-                        yield result
+                    with open(f"{log_path}/article.txt", "a", encoding="UTF-8") as f:
+                        f.write(result.title + "\n")
+                    yield result
             except ConnectionError as e:
                 print(f'😭 Error: "{e}", aborting the search!')
 
@@ -193,6 +206,7 @@ class ArticleFeedStream:
     client: Instructor
     model: str
     request: str
+    checked_article_ids: Set[str] = set()
 
     def __init__(
         self,
@@ -224,6 +238,11 @@ class ArticleFeedStream:
     def iter(self) -> Iterable[ArticleFeed]:
         """Generate article feeds."""
         for article in self.articles:
+            # Deduplicate articles
+            if article.entry_id in self.checked_article_ids:
+                continue
+
+            # Run check if not duplicate
             print(f'🔬 Checking if you want to read "{article.title}"...')
             try:
                 proof = self.client.chat.completions.create(
@@ -231,20 +250,31 @@ class ArticleFeedStream:
                     messages=self.get_history(article),
                     response_model=relevant_proof(article, self.request),
                     max_retries=2,
+                    temperature=0,  # We want the proof to be accurate
+                    presence_penalty=-2,  # We want to encourage the proof to be relevant
                 )
+
+                # Feed is successfully generated at this point, run deduplication
+                self.checked_article_ids.add(article.entry_id)
                 feed = ArticleFeed(title=article.title, proof=proof)
-                with open("log/feed.txt", "a", encoding="UTF-8") as f:
+                with open(f"{log_path}/feed.txt", "a", encoding="UTF-8") as f:
                     f.write(
                         f"{article.title}\n{feed.proof.model_dump_json(indent=2)}\n\n"
                     )
                 yield feed
-            except ConnectionError as e:
-                print(f'😭 Error: "{e}", aborting the check!')
+            except BadRequestError as e:
+                print(f'😭 Connection is unstable: "{e}", aborting the check!')
+            except InstructorRetryException as e:
+                print(f'😭 Max retry exceeded: "{e}", retrying!')
+
+                # Retry exception is typically triggered when the article is irrelevant
+                # to the user request, so it's better to deduplicate it
+                self.checked_article_ids.add(article.entry_id)
 
 
 # Test a stream of search queries
-REQUEST = """Can you find me some papers about large language models,
-that utilize abstract syntax tree in their research?"""
+REQUEST = """Can you find me some papers about designing a new
+programming language for LLM model?"""
 search_stream = SearchStream(llm_client, MODEL, REQUEST)
 article_stream = ArticleStream(search_stream.iter(), arxiv_client)
 feed_stream = ArticleFeedStream(article_stream.iter(), llm_client, MODEL, REQUEST)
