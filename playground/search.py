@@ -1,5 +1,7 @@
-import arxiv
+"""Test arXiv search."""
+
 import logging
+import arxiv
 
 logging.basicConfig(level=logging.DEBUG)
 
