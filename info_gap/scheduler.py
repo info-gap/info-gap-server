@@ -29,8 +29,8 @@ class Scheduler:
                 for subtask in subtasks:
                     self.add_task(subtask)
             except BadRequestError as e:
-                print(f'😭 Server is unstable: "{e}", aborting the check!')
+                print(f'😭 Server is unstable: "{e}", aborting!')
             except InstructorRetryException as e:
-                print(f'😭 Max retry exceeded: "{e}", retrying!')
+                print(f'😭 Max retry exceeded: "{e}", aborting!')
             except ConnectionError as e:
-                print(f'😭 Connection is unstable: "{e}", aborting the search!')
+                print(f'😭 Connection is unstable: "{e}", aborting!')

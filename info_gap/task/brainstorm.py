@@ -5,7 +5,7 @@ from instructor.client import ChatCompletionMessageParam
 from info_gap.task.base_task import BaseTask
 from info_gap.task.search import SearchTask
 from info_gap.model import Search
-from info_gap.config import LOG_PATH, LLM_CLIENT, MODEL
+from info_gap.config import LOG_PATH, LLM_CLIENT, MODEL, FORMAT_RULE
 from info_gap.deduplicate import dedup_query
 
 
@@ -27,8 +27,9 @@ class BrainStormTask(BaseTask):
         return [
             {
                 "role": "system",
-                "content": """You are a world class arXiv search agent.
-                Read the user request and formulate a search query.""",
+                "content": f"""You are a world class arXiv search agent.
+                Read the user request and formulate a search query.
+                Please format your query as: '{FORMAT_RULE}'.""",
             },
             {
                 "role": "user",
@@ -42,20 +43,21 @@ class BrainStormTask(BaseTask):
 
     def run(self) -> Iterable["BaseTask"]:
         """Run the task, return subtasks it generates."""
-        search = LLM_CLIENT.chat.completions.create(
-            model=MODEL,
-            messages=self.get_history(),
-            response_model=Search,
-            max_retries=2,
-            temperature=1,  # We want the search query to be imaginative
-        )
+        try:
+            search = LLM_CLIENT.chat.completions.create(
+                model=MODEL,
+                messages=self.get_history(),
+                response_model=Search,
+                max_retries=2,
+                temperature=1,  # We want the search query to be imaginative
+            )
 
-        # Deduplicate the search query
-        if dedup_query(search.query):
-            with open(f"{LOG_PATH}/query.txt", "a", encoding="UTF-8") as f:
-                f.write(search.model_dump_json(indent=2) + "\n")
-            yield SearchTask(request=self.request, search=search)
-
-        # For every 4 articles searched, we brainstorm a new search query
-        self.priority -= 4
-        yield self
+            # Deduplicate the search query
+            if dedup_query(search.query):
+                with open(f"{LOG_PATH}/query.txt", "a", encoding="UTF-8") as f:
+                    f.write(search.model_dump_json(indent=2) + "\n")
+                yield SearchTask(request=self.request, search=search)
+        finally:
+            # For every 4 articles searched, we brainstorm a new search query
+            self.priority -= 4
+            yield self

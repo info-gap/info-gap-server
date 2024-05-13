@@ -46,7 +46,7 @@ class GenerateFeedTask(BaseTask):
         proof = LLM_CLIENT.chat.completions.create(
             model=MODEL,
             messages=self.get_history(self.article),
-            response_model=relevant_proof(self.article, self.request),
+            response_model=relevant_proof(self.article),
             max_retries=2,
             temperature=0,  # We want the proof to be accurate
             presence_penalty=-2,  # We want to encourage the proof to be relevant

@@ -7,7 +7,7 @@ logging.basicConfig(level=logging.DEBUG)
 
 arxiv_client = arxiv.Client()
 search = arxiv.Search(
-    query="large language model AND abstract syntax tree",
+    query='"large language model" AND "abstract syntax tree"',
     max_results=10,
     sort_by=arxiv.SortCriterion.SubmittedDate,
 )

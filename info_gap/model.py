@@ -1,8 +1,9 @@
 """Model of the application."""
 
-from typing import Annotated
-from pydantic import BaseModel, field_validator, Field, BeforeValidator
+from typing import Annotated, Callable
+from pydantic import BaseModel, Field, BeforeValidator, ConfigDict
 import instructor
+from instructor import Instructor
 import arxiv  # type: ignore
 from info_gap.config import LLM_CLIENT, MODEL, FORMAT_RULE
 
@@ -21,55 +22,92 @@ class Search(BaseModel):
                 temperature=0,
             )
         ),
-    ] = Field(..., description=f"The search query. Format rule is: '{FORMAT_RULE}'")
+    ] = Field(..., description="The search query.")
+    model_config = ConfigDict(
+        json_schema_extra={
+            "examples": [
+                {
+                    "query": '"Quantum Computing" AND "Machine Learning"',
+                },
+                {
+                    "query": '("Quantum" OR "Electron") AND ("Machine Learning" OR "LLM")',
+                },
+                {
+                    "query": '("Health" OR "WHO") ANDNOT "COVID-19"',
+                },
+            ]
+        }
+    )
 
 
-def relevant_proof(article: arxiv.Result, request: str):
-    """Proof of relevancy of an article to the user request."""
+def validate_when_nonempty(
+    statement: str,
+    client: Instructor,
+    allow_override: bool = False,
+    model: str = "gpt-3.5-turbo",
+    temperature: float = 0,
+) -> Callable[[str], str]:
+    """Validate a string with LLM when it is nonempty."""
 
-    class RelevantProof(BaseModel):
+    def llm(x: str):
+        if x == "":
+            return x
+        return instructor.llm_validator(
+            statement, client, allow_override, model, temperature
+        )(x)
+
+    return llm
+
+
+def relevant_proof(article: arxiv.Result):
+    """Proof that the article is relevant to the user request."""
+
+    class Proof(BaseModel):
         """Model of a proof of relevancy."""
 
-        part: Annotated[
+        language_name: Annotated[
             str,
             BeforeValidator(
-                instructor.llm_validator(
-                    f"""The text must be cited from '{article.summary}'!
-                    It should not be illusionary or irrelevant!""",
+                validate_when_nonempty(
+                    f"""It should be part of '{article.summary}',
+                    and it should be a programming language,
+                    not just a framework or an approach.""",
                     client=LLM_CLIENT,
                     model=MODEL,
                     allow_override=False,
                     temperature=0,
                 )
             ),
-        ] = Field(..., description="Cite relevant part from article summary.")
-        reason: Annotated[
-            str,
-            BeforeValidator(
-                instructor.llm_validator(
-                    f"""The text should explain why paper '{article.title}' is
-                    relevant to request '{request}' based on '{article.summary}'.
-                    It should not be illusionary or irrelevant!""",
-                    client=LLM_CLIENT,
-                    model=MODEL,
-                    allow_override=False,
-                    temperature=0,
-                )
-            ),
-        ] = Field(..., description="Explain the relevancy.")
-        relevancy: float = Field(
-            ..., description="Your rating of the relevancy from 0 to 10."
+        ] = Field(
+            ...,
+            description="Name of the proposed programming language. Leave empty if not proposed.",
+        )
+        relation: str = Field(
+            ...,
+            description="Relation between the language and LLM.",
+        )
+        model_config = ConfigDict(
+            json_schema_extra={
+                "examples": [
+                    {
+                        "language_name": "",
+                        "relation": """Although the article is about LLM, 
+                        there is no mention of a programming language.""",
+                    },
+                    {
+                        "language_name": "PythonPlus",
+                        "relation": "PythonPlus helps LLM to generate more accurate results.",
+                    },
+                    {
+                        "language_name": "RLHF-Script",
+                        "relation": """RLHF-Script is a new programming language that helps 
+                        with the training of LLMs.""",
+                    },
+                ]
+            }
         )
 
-        @field_validator("relevancy")
-        @classmethod
-        def relevancy_should_be_in_range(cls, v: float) -> float:
-            """Check if relevancy is in the range of 0 to 10."""
-            if v < 0 or v > 10:
-                raise ValueError("Relevancy should be in the range of 0 to 10.")
-            return v
-
-    return RelevantProof
+    return Proof
 
 
 class ArticleFeed(BaseModel):

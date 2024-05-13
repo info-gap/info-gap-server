@@ -28,11 +28,13 @@ os.makedirs(LOG_PATH, exist_ok=True)
 # Initialize arXiv client
 ARXIV_CLIENT = arxiv.Client()
 FORMAT_RULE = """If you want to find paper about `Keyword One`,
-your query is: `Keyword One`; 
+your query is: `"Keyword One"`; 
 If you want to find paper about `Keyword One` AND `Keyword Two`, 
-your query is: `Keyword One AND Keyword Two`; 
+your query is: `"Keyword One" AND "Keyword Two"`; 
 If you want to find paper about `Keyword One` OR `Keyword Two`, 
-your query is: `Keyword One OR Keyword Two`; 
+your query is: `"Keyword One" OR "Keyword Two"`; 
 If you want to find paper about `Keyword One` ANDNOT `Keyword Two`, 
-your query is: `Keyword One ANDNOT Keyword Two`. 
-You can use parenthesis to group the query!"""
+your query is: `"Keyword One" ANDNOT "Keyword Two"`. 
+You can use parenthesis to group the queries!
+Keywords should be concise and relevant to the topic you are interested in,
+typically a single word or a short phrase."""
