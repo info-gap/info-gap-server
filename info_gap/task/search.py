@@ -2,31 +2,31 @@
 
 from typing import Iterable, Generator, Optional
 import arxiv  # type: ignore
-from info_gap.model import Search
+from info_gap.model import Request, Search
 from info_gap.task.base_task import BaseTask
 from info_gap.task.generate_feed import GenerateFeedTask
-from info_gap.config import LOG_PATH, ARXIV_CLIENT
+from info_gap.config import LOG_PATH, ARXIV_CLIENT, MAX_RESULTS
 from info_gap.deduplicate import dedup_article
 
 
 class SearchTask(BaseTask):
     """Task for running search query."""
 
-    request: str
+    request: Request
     search: Search
 
     result_generator: Optional[Generator[arxiv.Result, None, None]] = None
 
-    def __init__(self, request: str, search: Search):
+    def __init__(self, request: Request, search: Search):
         self.request = request
         self.search = search
-        super().__init__(name=f"SearchTask({self.search.query[:30]}...)", priority=36)
+        super().__init__(name=f"SearchTask({self.search.query})", priority=36)
 
     def init_generator(self):
         """Initialize the generator for search results."""
         arxiv_search = arxiv.Search(
             query=self.search.query,
-            max_results=40,
+            max_results=MAX_RESULTS,
             sort_by=arxiv.SortCriterion.SubmittedDate,
         )
         self.result_generator = ARXIV_CLIENT.results(arxiv_search)
@@ -45,7 +45,7 @@ class SearchTask(BaseTask):
                     f.write(result.title + "\n")
                 yield GenerateFeedTask(request=self.request, article=result)
 
-            # Return lower priority version of `self` as subtask
+            # Add task "search next page" with 1 lower priority
             self.priority -= 1
             yield self
         except StopIteration:

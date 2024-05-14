@@ -37,3 +37,4 @@ You can use parenthesis to group the queries!
 Keywords should be concise and relevant to the topic you are interested in, 
 typically a single word or a short phrase.
 """
+MAX_RESULTS = 100

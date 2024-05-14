@@ -6,7 +6,7 @@ from info_gap.error import ValidationError
 from info_gap.task.base_task import BaseTask
 from info_gap.task.completion_task import CompletionTask
 from info_gap.task.search import SearchTask
-from info_gap.model import Search
+from info_gap.model import Request, Search
 from info_gap.config import LOG_PATH, QUERY_RULE
 from info_gap.deduplicate import dedup_query
 
@@ -14,11 +14,13 @@ from info_gap.deduplicate import dedup_query
 class BrainStormTask(CompletionTask):
     """Task for brainstorming search query."""
 
-    def __init__(self, request: str):
+    request: Request
+
+    def __init__(self, request: Request):
+        self.request = request
         super().__init__(
             name="BrainStormTask",
             priority=32,
-            request=request,
             temperature=1,
             history=[
                 {
@@ -59,7 +61,7 @@ class BrainStormTask(CompletionTask):
                 },
                 {
                     "role": "user",
-                    "content": request,
+                    "content": f"""Can you find me some papers {self.request.this_paper_should_be}?""",
                 },
                 {
                     "role": "assistant",
@@ -88,5 +90,5 @@ class BrainStormTask(CompletionTask):
             )
 
     def after_run(self) -> Iterable[BaseTask]:
-        """Loop back to self."""
+        """After run, add another brainstorm as subtask."""
         yield self

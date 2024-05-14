@@ -10,24 +10,18 @@ from info_gap.task.base_task import BaseTask
 class CompletionTask(BaseTask):
     """Base class for all completion tasks."""
 
-    request: str
     history: List[ChatCompletionMessageParam]
-    retries: int
     temperature: float
 
     def __init__(  # pylint: disable=too-many-arguments
         self,
         name: str,
         priority: int,
-        request: str,
+        temperature: float,
         history: Optional[List[ChatCompletionMessageParam]] = None,
-        num_retry: int = 2,
-        temperature: float = 0,
     ):
         super().__init__(name, priority)
-        self.request = request
         self.history = history or []
-        self.retries = num_retry
         self.temperature = temperature
 
     def parse_response(self, _: str) -> Iterable["BaseTask"]:
@@ -41,41 +35,10 @@ class CompletionTask(BaseTask):
     def run(self) -> Iterable[BaseTask]:
         """Implemented by running completion. You no longer need to override this method."""
         try:
-            # Run initial completion
             history: List[ChatCompletionMessageParam] = self.history.copy()
             completion = self._complete(history)
-
-            # Retry if failed
-            last_exception = None
-            for _ in range(self.retries):
-                try:
-                    # After successful parse, yield result and return
-                    result = self.parse_response(completion)
-                    yield from result
-                    return
-                except Exception as e:  # pylint: disable=broad-exception-caught
-                    last_exception = e
-
-                    # Upon parse failure, add self-healing message
-                    history += [
-                        {
-                            "role": "assistant",
-                            "content": completion,
-                        },
-                        {
-                            "role": "system",
-                            "content": str(e),
-                        },
-                        {
-                            "role": "user",
-                            "content": self.request,
-                        },
-                    ]
-                    completion = self._complete(history)
-
-            # If all retries failed, raise the last exception
-            assert last_exception is not None
-            raise last_exception
+            result = self.parse_response(completion)
+            yield from result
         finally:
             yield from self.after_run()
 
