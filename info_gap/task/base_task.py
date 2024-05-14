@@ -6,13 +6,12 @@ from typing import Iterable
 class BaseTask:
     """Base class for all tasks."""
 
-    def get_name(self) -> str:
-        """Get the name of the task."""
-        raise NotImplementedError
+    name: str
+    priority: int
 
-    def get_priority(self) -> int:
-        """Get the priority of the task."""
-        raise NotImplementedError
+    def __init__(self, name: str, priority: int):
+        self.name = name
+        self.priority = priority
 
     def run(self) -> Iterable["BaseTask"]:
         """Run the task, return subtasks it generates."""

@@ -1,63 +1,92 @@
 """Task for brainstorming search query."""
 
-from typing import Iterable, List
-from instructor.client import ChatCompletionMessageParam
+from typing import Iterable
+import re
+from info_gap.error import ValidationError
 from info_gap.task.base_task import BaseTask
+from info_gap.task.completion_task import CompletionTask
 from info_gap.task.search import SearchTask
 from info_gap.model import Search
-from info_gap.config import LOG_PATH, LLM_CLIENT, MODEL, FORMAT_RULE
+from info_gap.config import LOG_PATH, QUERY_RULE
 from info_gap.deduplicate import dedup_query
 
 
-class BrainStormTask(BaseTask):
+class BrainStormTask(CompletionTask):
     """Task for brainstorming search query."""
 
-    request: str
-    priority: int = 32
-
     def __init__(self, request: str):
-        self.request = request
+        super().__init__(
+            name="BrainStormTask",
+            priority=32,
+            request=request,
+            temperature=1,
+            history=[
+                {
+                    "role": "system",
+                    "content": """You are a world class arXiv search agent. Read the user request and formulate a search query.""",
+                },
+                {
+                    "role": "system",
+                    "content": f"""The rule for a search query is: '{QUERY_RULE}'""",
+                },
+                {
+                    "role": "system",
+                    "content": """Please format your reply STRICTLY as: 'Sure! I want to search with keyword `your_keyword`.'""",
+                },
+                {
+                    "role": "user",
+                    "content": "Can you find me some papers about quantum computing?",
+                },
+                {
+                    "role": "assistant",
+                    "content": """Sure! I want to search with keyword `"quantum compute" OR "quantum computing"`.""",
+                },
+                {
+                    "role": "user",
+                    "content": "Can you find me some papers about COVID-19?",
+                },
+                {
+                    "role": "assistant",
+                    "content": """Sure! I want to search with keyword `"COVID-19" AND "virus"`.""",
+                },
+                {
+                    "role": "user",
+                    "content": "Can you find me some papers about RLHF in image generation?",
+                },
+                {
+                    "role": "assistant",
+                    "content": """Sure! I want to search with keyword `("RLHF" AND "image generation") ANDNOT "NLP"`.""",
+                },
+                {
+                    "role": "user",
+                    "content": request,
+                },
+                {
+                    "role": "assistant",
+                    "content": """Sure! I want to """,
+                },
+            ],
+        )
 
-    def get_name(self) -> str:
-        """Get the name of the task."""
-        return "BrainStormTask"
-
-    def get_history(self) -> List[ChatCompletionMessageParam]:
-        """Get the history of the conversation."""
-        return [
-            {
-                "role": "system",
-                "content": f"""You are a world class arXiv search agent.
-                Read the user request and formulate a search query.
-                Please format your query as: '{FORMAT_RULE}'.""",
-            },
-            {
-                "role": "user",
-                "content": self.request,
-            },
-        ]
-
-    def get_priority(self) -> int:
-        """Get the priority of the task."""
-        return 1
-
-    def run(self) -> Iterable["BaseTask"]:
-        """Run the task, return subtasks it generates."""
-        try:
-            search = LLM_CLIENT.chat.completions.create(
-                model=MODEL,
-                messages=self.get_history(),
-                response_model=Search,
-                max_retries=2,
-                temperature=1,  # We want the search query to be imaginative
-            )
-
-            # Deduplicate the search query
+    def parse_response(self, response: str) -> Iterable["BaseTask"]:
+        """Parse the response."""
+        pattern = r"search with keyword `(.+?)`"
+        match = re.search(pattern, response)
+        if match:
+            query = match.group(1)
+            search = Search(query=query)
             if dedup_query(search.query):
                 with open(f"{LOG_PATH}/query.txt", "a", encoding="UTF-8") as f:
                     f.write(search.model_dump_json(indent=2) + "\n")
+
+                # For every 4 articles searched, we brainstorm a new search query.
+                self.priority -= 4
                 yield SearchTask(request=self.request, search=search)
-        finally:
-            # For every 4 articles searched, we brainstorm a new search query
-            self.priority -= 4
-            yield self
+        else:
+            raise ValidationError(
+                f"""Pattern '{pattern}' is not found in your response '{response}'."""
+            )
+
+    def after_run(self) -> Iterable[BaseTask]:
+        """Loop back to self."""
+        yield self

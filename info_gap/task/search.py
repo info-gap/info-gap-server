@@ -14,22 +14,13 @@ class SearchTask(BaseTask):
 
     request: str
     search: Search
-    priority: int = 36
 
-    result_generator: Optional[Generator[arxiv.Result, None, None]]
+    result_generator: Optional[Generator[arxiv.Result, None, None]] = None
 
     def __init__(self, request: str, search: Search):
         self.request = request
         self.search = search
-        self.result_generator = None
-
-    def get_name(self) -> str:
-        """Get the name of the task."""
-        return f"SearchTask({self.search.query[:30]}...)"
-
-    def get_priority(self) -> int:
-        """Get the priority of the task. New articles are favored."""
-        return self.priority
+        super().__init__(name=f"SearchTask({self.search.query[:30]}...)", priority=36)
 
     def init_generator(self):
         """Initialize the generator for search results."""

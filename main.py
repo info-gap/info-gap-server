@@ -13,8 +13,7 @@ logging.basicConfig(
 )
 
 # Run application
-REQUEST = """Can you find me some papers about designing a new
-programming language for LLM model?"""
+REQUEST = "Can you find me some papers about designing a new programming language for LLM model?"
 brainstorm_task = BrainStormTask(request=REQUEST)
 scheduler = Scheduler()
 scheduler.add_task(brainstorm_task)
