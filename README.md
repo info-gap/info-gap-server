@@ -23,7 +23,7 @@ Create `.env` and set:
 
 ```
 OPENAI_API_URL=<your-api-url>
-OPENAI_API_KEY=<your-api-key> # 无密码的话可以写任意东西
+OPENAI_API_KEY=<your-api-key> # Can be arbitrary if no password
 ```
 
 Modify `REQUEST` in `main.py`, and run agent:
