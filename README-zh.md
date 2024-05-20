@@ -30,18 +30,22 @@ OPENAI_API_URL=<your-api-url>
 OPENAI_API_KEY=<your-api-key> # 无密码的话可以写任意东西
 ```
 
+在 `main.py` 中修改 `REQUEST`，然后运行助理：
+
+```
+python main.py
+```
+
 ## 开发计划
 
 - [x] 分页查询，按照优先级调度
 - [x] 日志
 - [ ] 模块性能测试
-- [ ] 优化提示
+- [x] 优化提示
 - [ ] Docker 封装和自定义 LLM
 - [ ] 客户端
 - [x] 优化去重逻辑
 
 ## 代码结构
 
-暂时都在 [main.py](main.py) 里面，写了很多注释，应该相对简明易懂。
-
-我用了 [Instructor](https://github.com/jxnl/instructor) 库来把对 LLM 输出的限制编码在类型里面。其中 `RelevantProof` 的实现参考了依值类型中的相等类型，即 `RelevantProof(article, request)` 表示 `article` 和 `request` 相关的证明。
+整体采用任务池架构，`info_gap/scheduler.py` 是调度器，`info_gap/task/` 中是各种任务，`main.py` 是程序入口。

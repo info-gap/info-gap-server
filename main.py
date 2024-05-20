@@ -1,7 +1,7 @@
 """Entrypoint of program."""
 
 import logging
-from examples.pl_about_llm import REQUEST_PL_ABOUT_LLM
+from examples.coding_agent import REQUEST
 from info_gap.task.brainstorm import BrainStormTask
 from info_gap.scheduler import Scheduler
 from info_gap.config import LOG_PATH
@@ -14,7 +14,7 @@ logging.basicConfig(
 )
 
 # Run application
-brainstorm_task = BrainStormTask(request=REQUEST_PL_ABOUT_LLM)
+brainstorm_task = BrainStormTask(request=REQUEST)
 scheduler = Scheduler()
 scheduler.add_task(brainstorm_task)
 scheduler.run()

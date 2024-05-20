@@ -3,7 +3,7 @@
 from info_gap.model import Example, Request
 
 # Run application
-REQUEST_PL_ABOUT_LLM = Request(
+REQUEST = Request(
     this_paper_should_be="about designing a new programming language for LLM model",
     accepted_reason_format="The name of the programming language is `your_language`. The language is designed for `your_purpose`.",
     unaccepted_reason_format="The paper is not about designing a new programming language for LLM, because `your_reason`.",
